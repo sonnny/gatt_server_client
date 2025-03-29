@@ -20,13 +20,17 @@
 //#define DEBUG_LOG(...)
 //#endif
 
+#define SERVICE_TO_SEARCH        0xFF10      // the only service were looking for to find the characteristic
+#define CHARACTERISTIC_TO_SEARCH 0xFF11      // the only characteristic were looking for to write values
+#define ADDRESS_TO_SEARCH        "28:CD:C1"  // picow mac address prefix, were only looking for picow
+
 // UUID of custom service that we'll access
-#define CUSTOM_SERVICE 0xFF10
-static const uint8_t service_name[16] = {0x00, 0x00, 0xFF, 0x10, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB} ;
+//#define CUSTOM_SERVICE 0xFF10
+//static const uint8_t service_name[16] = {0x00, 0x00, 0xFF, 0x10, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0x80, 0x5F, //0x9B, 0x34, 0xFB} ;
 
 // UUID for the characteristic descriptors of interest
-#define CHARACTERISTIC_USER_DESCRIPTION 0x2901
-#define CHARACTERISTIC_CONFIGURATION    0x2902
+//#define CHARACTERISTIC_USER_DESCRIPTION 0x2901
+//#define CHARACTERISTIC_CONFIGURATION    0x2902
 
 // Bluetooth control structures
 static btstack_packet_callback_registration_t hci_event_callback_registration;
@@ -69,12 +73,10 @@ static gatt_client_characteristic_t characteristic;
 static bool service_found = false;
 static bool show_characteristic_once = true;
 
-char * hello = "ON13";
-
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 
 static bool found_device(advertising_report_t * e){
-  if (strncmp(bd_addr_to_str(e->address), "28:CD:C1", 8) == 0) return true;
+  if (strncmp(bd_addr_to_str(e->address), ADDRESS_TO_SEARCH, 8) == 0) return true;
   else return false;}
 ////////////////////////////////////////////
 static void fill_advertising_report_from_packet(advertising_report_t * report, uint8_t *packet){
@@ -95,19 +97,16 @@ static void handle_gatt_client_event(uint8_t packet_type, uint16_t channel, uint
     switch(hci_event_packet_get_type(packet)){
         case GATT_EVENT_SERVICE_QUERY_RESULT:
             gatt_event_service_query_result_get_service(packet, &service);
-            if (service.uuid16 == (uint16_t)65296) {
+            if (service.uuid16 == SERVICE_TO_SEARCH) {
               my_service = service;
               service_found = true;}
-              //printf("found service ff10 *******************\n");}
   
             break;
         case GATT_EVENT_CHARACTERISTIC_QUERY_RESULT:
           if (show_characteristic_once) {
             gatt_event_characteristic_query_result_get_characteristic(packet, &characteristic);
-            if (characteristic.uuid16 == (uint16_t)65297){
-              printf("characteristic ready for writing...\n");
-              int status = gatt_client_write_value_of_characteristic_without_response(connection_handle,
-              characteristic.value_handle, strlen(hello), hello);              
+           if (characteristic.uuid16 == CHARACTERISTIC_TO_SEARCH){
+              printf("characteristic ready for writing...\n");           
             }
             show_characteristic_once = false;}
             break;
@@ -144,11 +143,9 @@ static void handle_hci_event(uint8_t packet_type, uint16_t channel, uint8_t *pac
               gap_connect(report.address,report.address_type);}
             break;
         case HCI_EVENT_META_GAP:
-            // wait for connection complete
             if (hci_event_gap_meta_get_subevent_code(packet) !=  GAP_SUBEVENT_LE_CONNECTION_COMPLETE) break;
             //printf("\nGATT browser - CONNECTED\n");
             connection_handle = gap_subevent_le_connection_complete_get_connection_handle(packet);
-            // query primary services
             gatt_client_discover_primary_services(handle_gatt_client_event, connection_handle);
             break;
         case HCI_EVENT_DISCONNECTION_COMPLETE:
